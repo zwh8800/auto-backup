@@ -1,4 +1,4 @@
-module github.com/zwh8800/backup-saves
+module github.com/zwh8800/auto-backup
 
 go 1.21.1
 
