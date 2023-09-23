@@ -3,11 +3,17 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"log"
 	"os"
 	"path"
+	"sync"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/getlantern/systray"
+	cp "github.com/otiai10/copy"
 	"github.com/sqweek/dialog"
+	"github.com/yudppp/throttle"
 )
 
 const configFileName = "AutoBackup.json"
@@ -39,6 +45,7 @@ func onReady() {
 	go onQuitBtnClick(mQuit)
 
 	doAutoBackup()
+	backup()
 }
 
 func onGetPathBtnClick(mGetPath *systray.MenuItem) {
@@ -67,6 +74,7 @@ func onSetPathBtnClick(mSetPath *systray.MenuItem) {
 		dest = directory
 
 		saveConfig()
+		doAutoBackup()
 	}
 }
 
@@ -127,10 +135,69 @@ func saveConfig() {
 	}
 }
 
-func doAutoBackup() {
+var watcher *fsnotify.Watcher
+
+func init() {
+	var err error
+	watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		dialog.Message("NewWatcher err: %s", err.Error()).Title("NewWatcher err").Error()
+		log.Fatal(err)
+	}
+
+	// Start listening for events.
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("event:", event)
+
+				backup()
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+				dialog.Message("watcher err: %s", err.Error()).Title("watcher err").Error()
+			}
+		}
+	}()
 
 }
 
-func onExit() {
+var mu sync.Mutex
 
+func doAutoBackup() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for _, p := range watcher.WatchList() {
+		watcher.Remove(p)
+	}
+
+	err := watcher.Add(src)
+	if err != nil {
+		log.Fatal(err)
+		dialog.Message("watcher Add err: %s", err.Error()).Title("watcher Add err").Error()
+	}
+}
+
+var backupThrottler = throttle.New(time.Second)
+
+func backup() {
+	backupThrottler.Do(func() {
+		log.Println("start copy")
+		defer log.Println("end copy")
+		err := cp.Copy(src, dest)
+		if err != nil {
+			log.Println("copy err:", err)
+		}
+	})
+}
+
+func onExit() {
+	watcher.Close()
 }

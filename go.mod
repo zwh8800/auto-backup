@@ -3,8 +3,11 @@ module github.com/zwh8800/backup-saves
 go 1.21.1
 
 require (
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/getlantern/systray v1.2.2
+	github.com/otiai10/copy v1.12.0
 	github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf
+	github.com/yudppp/throttle v1.0.4
 )
 
 require (
